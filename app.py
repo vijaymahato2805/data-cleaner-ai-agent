@@ -4,34 +4,32 @@ import seaborn as sns
 import matplotlib.pyplot as plt
 import openai
 import io
-from reportlab.platypus import SimpleDocTemplate, Paragraph
-from reportlab.lib.styles import getSampleStyleSheet
+import os
+from dotenv import load_dotenv
 
-# Set Streamlit config
+# Load OpenAI API key from .env
+load_dotenv()
+openai.api_key = os.getenv("')
+# Streamlit config
 st.set_page_config(page_title="📊 Data Analyst AI Agent", layout="wide")
-
-# Title
 st.title("📊 Data Analyst AI Agent")
 
-# Sidebar: OpenAI API Key
-openai_api_key = st.sidebar.text_input("🔐 Enter your OpenAI API Key", type="password")
-
-# Sidebar: Upload file (CSV/Excel)
+# File uploader
 uploaded_file = st.sidebar.file_uploader("📁 Upload a CSV or Excel file", type=["csv", "xlsx", "xls"])
 
-# Function to read file
+# === Functions ===
+
+# Load CSV/Excel
 def read_file(file):
     if file.name.endswith(".csv"):
         return pd.read_csv(file)
     else:
         return pd.read_excel(file)
 
-# Function to generate AI summary
-def generate_ai_summary(df, api_key):
-    openai.api_key = api_key
-
+# AI Summary Function
+def generate_ai_summary(df):
     prompt = f"""
-You are a data analyst. Provide a professional summary of the dataset below.
+You are a data analyst. Provide a detailed summary of this dataset.
 
 Summary Statistics:
 {df.describe().to_string()}
@@ -42,118 +40,124 @@ Column Types:
 Sample Rows:
 {df.head(3).to_string()}
 """
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response['choices'][0]['message']['content']
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        return response["choices"][0]["message"]["content"]
+    except Exception as e:
+        return f"❌ OpenAI API Error: {e}"
 
-# Function to answer natural language questions about the data
-def answer_question(question, df, api_key):
-    openai.api_key = api_key
+# AI Q&A Function
+def answer_user_question(df, question):
     prompt = f"""
-You are a data expert. Answer the question based on this dataset.
+You are a data analyst. Based on the following dataset, answer the user's question.
 
-Dataset Sample:
+Dataset Columns and Types:
+{df.dtypes.to_string()}
+
+First few rows of data:
 {df.head(10).to_string()}
 
-Question:
+User's Question:
 {question}
 """
-    response = openai.ChatCompletion.create(
-        model="gpt-3.5-turbo",
-        messages=[{"role": "user", "content": prompt}]
-    )
-    return response['choices'][0]['message']['content']
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-3.5-turbo",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0.3
+        )
+        return response['choices'][0]['message']['content']
+    except Exception as e:
+        return f"❌ OpenAI API Error: {e}"
 
-# Function to export summary to PDF
-def export_summary_to_pdf(summary_text):
-    buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer)
-    styles = getSampleStyleSheet()
-    flowables = [Paragraph(summary_text, styles["Normal"])]
-    doc.build(flowables)
-    buffer.seek(0)
-    return buffer
-
-# If file is uploaded
+# === Main App Logic ===
 if uploaded_file:
     try:
-        # Load file
         df = read_file(uploaded_file)
         st.success("✅ File uploaded successfully!")
 
+        # Header with file name
+        st.header(f"📄 Data from: {uploaded_file.name}")
+
         # Clean data
         df_cleaned = df.drop_duplicates().fillna(method='ffill')
-
-        # Preview
-        st.subheader("📄 Cleaned Data")
+        st.subheader("🧹 Cleaned Data")
         st.dataframe(df_cleaned)
 
         # Column selector
-        selected_columns = st.multiselect("📌 Select columns for analysis", df_cleaned.columns.tolist(), default=df_cleaned.columns.tolist())
+        selected_columns = st.multiselect(
+            "📌 Select columns for analysis",
+            options=df_cleaned.columns.tolist(),
+            default=df_cleaned.columns.tolist()
+        )
         df_filtered = df_cleaned[selected_columns]
 
-        # Chart options
-        st.sidebar.markdown("### 📊 Chart Options")
-        numeric_columns = df_filtered.select_dtypes(include=['float64', 'int64']).columns.tolist()
-        categorical_columns = df_filtered.select_dtypes(include=['object', 'category']).columns.tolist()
-        chart_type = st.sidebar.selectbox("Select Chart Type", ["Scatter", "Line", "Bar"])
+        # Optional chart
+        show_chart = st.checkbox("📊 Generate a Chart", value=False)
+        if show_chart:
+            st.sidebar.markdown("### Chart Options")
+            numeric_columns = df_filtered.select_dtypes(include=['float64', 'int64']).columns.tolist()
+            categorical_columns = df_filtered.select_dtypes(include=['object', 'category']).columns.tolist()
 
-        if chart_type == "Bar":
-            x_axis = st.sidebar.selectbox("X-axis (Categorical)", categorical_columns)
-            y_axis = st.sidebar.selectbox("Y-axis (Numeric)", numeric_columns)
-        else:
-            x_axis = st.sidebar.selectbox("X-axis", numeric_columns)
-            y_axis = st.sidebar.selectbox("Y-axis", numeric_columns)
+            chart_type = st.sidebar.selectbox("Select Chart Type", ["Scatter", "Line", "Bar"])
 
-        # Render chart
-        st.subheader("📈 Data Visualization")
-        fig, ax = plt.subplots()
-        try:
-            if chart_type == "Scatter":
-                sns.scatterplot(data=df_filtered, x=x_axis, y=y_axis, ax=ax)
-            elif chart_type == "Line":
-                sns.lineplot(data=df_filtered, x=x_axis, y=y_axis, ax=ax)
-            elif chart_type == "Bar":
-                sns.barplot(data=df_filtered, x=x_axis, y=y_axis, ax=ax)
-            st.pyplot(fig)
-        except Exception as e:
-            st.error(f"Chart Error: {e}")
+            if chart_type == "Bar":
+                x_axis = st.sidebar.selectbox("X-axis (Categorical)", options=categorical_columns)
+                y_axis = st.sidebar.selectbox("Y-axis (Numeric)", options=numeric_columns)
+            else:
+                x_axis = st.sidebar.selectbox("X-axis", options=numeric_columns)
+                y_axis = st.sidebar.selectbox("Y-axis", options=numeric_columns)
 
-        # AI summary
-        st.subheader("🧠 AI Summary")
-        if openai_api_key:
-            summary_text = generate_ai_summary(df_filtered, openai_api_key)
-            st.write(summary_text)
+            st.subheader("📈 Data Visualization")
+            fig, ax = plt.subplots()
+            try:
+                if chart_type == "Scatter":
+                    sns.scatterplot(data=df_filtered, x=x_axis, y=y_axis, ax=ax)
+                elif chart_type == "Line":
+                    sns.lineplot(data=df_filtered, x=x_axis, y=y_axis, ax=ax)
+                elif chart_type == "Bar":
+                    sns.barplot(data=df_filtered, x=x_axis, y=y_axis, ax=ax)
+                st.pyplot(fig)
+            except Exception as e:
+                st.error(f"❌ Chart Error: {e}")
 
-            # Export to text
-            st.download_button("📄 Download Summary (TXT)", summary_text, file_name="ai_summary.txt", mime="text/plain")
+        # === AI Summary ===
+        st.subheader("🧠 AI-Generated Summary")
+        summary_text = generate_ai_summary(df_filtered)
+        st.write(summary_text)
 
-            # Export to PDF
-            pdf_file = export_summary_to_pdf(summary_text)
-            st.download_button("📄 Download Summary (PDF)", pdf_file, file_name="ai_summary.pdf", mime="application/pdf")
-        else:
-            st.info("Enter your OpenAI API key to get AI summary.")
+        st.download_button(
+            label="📄 Download Summary (TXT)",
+            data=summary_text,
+            file_name="ai_summary.txt",
+            mime="text/plain"
+        )
 
-        # Natural language question
-        st.subheader("💬 Ask a Question About Your Data")
-        if openai_api_key:
-            user_question = st.text_input("Ask your question (e.g., 'What is the average revenue?')")
+        # === Chat-style Q&A ===
+        st.subheader("💬 Ask Questions About Your Data")
+        with st.expander("Open Chat with Your Dataset"):
+            user_question = st.text_input("Type your question here...")
             if user_question:
-                answer = answer_question(user_question, df_filtered, openai_api_key)
+                answer = answer_user_question(df_filtered, user_question)
                 st.success("Answer:")
                 st.write(answer)
-        else:
-            st.info("Enter your OpenAI API key to ask questions.")
 
-        # Download cleaned data
+        # === Download Cleaned Data ===
         st.subheader("📥 Download Cleaned Data")
         csv_buffer = io.StringIO()
         df_filtered.to_csv(csv_buffer, index=False)
-        st.download_button("Download CSV", csv_buffer.getvalue(), file_name="cleaned_data.csv", mime="text/csv")
+        st.download_button(
+            label="Download CSV",
+            data=csv_buffer.getvalue(),
+            file_name="cleaned_data.csv",
+            mime="text/csv"
+        )
 
     except Exception as e:
-        st.error(f"❌ Error reading file: {e}")
+        st.error(f"❌ Error processing file: {e}")
 else:
     st.info("👆 Upload a CSV or Excel file to begin.")
