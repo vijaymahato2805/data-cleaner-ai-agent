@@ -21,10 +21,22 @@ uploaded_file = st.sidebar.file_uploader("📁 Upload a CSV or Excel file", type
 
 # Load CSV/Excel
 def read_file(file):
+    # Read raw data without headers
     if file.name.endswith(".csv"):
-        return pd.read_csv(file)
+        df_raw = pd.read_csv(file, header=None)
     else:
-        return pd.read_excel(file)
+        df_raw = pd.read_excel(file, header=None)
+
+    # Detect the first non-empty row and set it as header
+    for i, row in df_raw.iterrows():
+        if not row.isnull().all():
+            df_raw.columns = row  # Set this row as header
+            df_clean = df_raw.iloc[i+1:]  # Keep the rest of the data
+            return df_clean.reset_index(drop=True)
+
+    # Fallback if nothing found
+    return df_raw
+
 
 # AI Summary Function
 def generate_ai_summary(df):
