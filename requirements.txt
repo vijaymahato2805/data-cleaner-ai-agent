@@ -5,4 +5,5 @@ seaborn
 openai
 reportlab
 openpyxl
+python-dotenv
 
