@@ -9,7 +9,7 @@ from dotenv import load_dotenv
 
 # Load OpenAI API key from .env
 load_dotenv()
-openai.api_key = os.getenv("')
+openai.api_key = os.getenv("")
 # Streamlit config
 st.set_page_config(page_title="📊 Data Analyst AI Agent", layout="wide")
 st.title("📊 Data Analyst AI Agent")
