@@ -21,34 +21,36 @@ uploaded_file = st.sidebar.file_uploader("📁 Upload a CSV or Excel file", type
 
 # Load CSV/Excel
 def read_file(file):
-    import numpy as np
+    import pandas as pd
 
-    # Load file without header
+    # Read raw data without headers
     if file.name.endswith(".csv"):
         df_raw = pd.read_csv(file, header=None)
     else:
         df_raw = pd.read_excel(file, header=None)
 
-    # Try to find a valid header row
+    # Scan for the first valid header row
     for i, row in df_raw.iterrows():
-        # Count non-null entries to guess if it's a header
-        non_null_count = row.notnull().sum()
-        if non_null_count >= len(row) // 2:  # Half or more should be non-null
-            candidate_header = row.astype(str).fillna("").str.strip()
+        if row.notnull().sum() >= len(row) // 2:
+            # Clean and deduplicate header names
+            header = row.fillna("").astype(str).str.strip().tolist()
+            seen = {}
+            deduped_header = []
+            for col in header:
+                if col in seen:
+                    seen[col] += 1
+                    deduped_header.append(f"{col}_{seen[col]}")
+                else:
+                    seen[col] = 0
+                    deduped_header.append(col)
 
-            # Ensure column names are unique
-            candidate_header = pd.io.parsers.ParserBase({'names': candidate_header})._maybe_dedup_names(candidate_header)
-
-            df_raw.columns = candidate_header
+            df_raw.columns = deduped_header
             df_clean = df_raw.iloc[i+1:].reset_index(drop=True)
-
-            # Drop empty columns
-            df_clean = df_clean.dropna(axis=1, how="all")
-
+            df_clean = df_clean.dropna(axis=1, how="all")  # Drop fully empty columns
             return df_clean
 
-    # Fallback: return raw data if nothing valid found
-    return df_raw
+    return df_raw  # fallback
+
 
 
 
