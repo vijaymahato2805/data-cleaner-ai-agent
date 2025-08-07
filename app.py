@@ -11,8 +11,8 @@ from dotenv import load_dotenv
 load_dotenv()
 openai.api_key = os.getenv("")
 # Streamlit config
-st.set_page_config(page_title="📊 Data Analyst AI Agent", layout="wide")
-st.title("📊 Data Analyst AI Agent")
+st.set_page_config(page_title="📊 Data Cleaner AI Agent", layout="wide")
+st.title("📊 Data Cleaner AI Agent")
 
 # File uploader
 uploaded_file = st.sidebar.file_uploader("📁 Upload a CSV or Excel file", type=["csv", "xlsx", "xls"])
