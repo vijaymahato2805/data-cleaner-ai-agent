@@ -21,21 +21,35 @@ uploaded_file = st.sidebar.file_uploader("📁 Upload a CSV or Excel file", type
 
 # Load CSV/Excel
 def read_file(file):
-    # Read raw data without headers
+    import numpy as np
+
+    # Load file without header
     if file.name.endswith(".csv"):
         df_raw = pd.read_csv(file, header=None)
     else:
         df_raw = pd.read_excel(file, header=None)
 
-    # Detect the first non-empty row and set it as header
+    # Try to find a valid header row
     for i, row in df_raw.iterrows():
-        if not row.isnull().all():
-            df_raw.columns = row  # Set this row as header
-            df_clean = df_raw.iloc[i+1:]  # Keep the rest of the data
-            return df_clean.reset_index(drop=True)
+        # Count non-null entries to guess if it's a header
+        non_null_count = row.notnull().sum()
+        if non_null_count >= len(row) // 2:  # Half or more should be non-null
+            candidate_header = row.astype(str).fillna("").str.strip()
 
-    # Fallback if nothing found
+            # Ensure column names are unique
+            candidate_header = pd.io.parsers.ParserBase({'names': candidate_header})._maybe_dedup_names(candidate_header)
+
+            df_raw.columns = candidate_header
+            df_clean = df_raw.iloc[i+1:].reset_index(drop=True)
+
+            # Drop empty columns
+            df_clean = df_clean.dropna(axis=1, how="all")
+
+            return df_clean
+
+    # Fallback: return raw data if nothing valid found
     return df_raw
+
 
 
 # AI Summary Function
